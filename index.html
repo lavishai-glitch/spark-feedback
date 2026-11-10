@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>משוב – יום החשיפה לספארק</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#07130f; --board:#0d241b; --board2:#10301f; --trace:#c98a45; --trace-dim:#5a3f22;
+    --energy:#3ee6ff; --energy-dim:#1b5c69; --led:#ffb53d; --text:#e8f3ee; --muted:#8fb1a3;
+    --line:#1d4733; --radius:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:'Heebo',system-ui,sans-serif;color:var(--text);
+    background:
+      radial-gradient(circle at 20% 10%, rgba(62,230,255,.07), transparent 40%),
+      radial-gradient(circle at 90% 90%, rgba(255,181,61,.06), transparent 45%),
+      var(--bg);
+    min-height:100%;
+  }
+  /* PCB trace texture */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.22;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:28px 28px;
+    mask-image:radial-gradient(circle at 50% 40%, #000 0%, transparent 75%);
+    -webkit-mask-image:radial-gradient(circle at 50% 40%, #000 0%, transparent 75%);
+  }
+  .wrap{position:relative;max-width:480px;margin:0 auto;padding:18px 16px 28px;min-height:100vh;display:flex;flex-direction:column}
+
+  /* ---------- battery ---------- */
+  .battery-row{display:flex;align-items:center;gap:10px;margin-bottom:18px;direction:ltr}
+  .battery{flex:1;height:26px;border:2px solid var(--muted);border-radius:7px;padding:3px;position:relative;display:flex;gap:3px}
+  .battery::after{content:"";position:absolute;right:-8px;top:6px;width:5px;height:10px;background:var(--muted);border-radius:0 3px 3px 0}
+  .cell{flex:1;border-radius:3px;background:#12271e;transition:background .35s, box-shadow .35s}
+  .cell.on{background:linear-gradient(180deg,#8ff3ff,var(--energy));box-shadow:0 0 10px rgba(62,230,255,.55)}
+  .cell.pulse{animation:pulse .6s ease-out}
+  @keyframes pulse{0%{filter:brightness(2.2)}100%{filter:brightness(1)}}
+  .pct{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--energy);min-width:46px;text-align:right}
+  .bolt{width:18px;height:18px;fill:var(--led)}
+
+  /* ---------- card ---------- */
+  .card{
+    background:linear-gradient(180deg,var(--board2),var(--board));
+    border:1px solid var(--line);border-radius:var(--radius);padding:22px 18px;
+    box-shadow:0 10px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04);
+    position:relative;overflow:hidden;animation:enter .35s ease-out;
+  }
+  @keyframes enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .card::before,.card::after{ /* solder pads */
+    content:"";position:absolute;width:10px;height:10px;border-radius:50%;
+    border:2px solid var(--trace);top:10px;opacity:.7
+  }
+  .card::before{right:10px}.card::after{left:10px}
+  .qnum{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--trace);letter-spacing:.08em;margin-bottom:8px}
+  h1{font-size:26px;line-height:1.25;margin:4px 0 12px;font-weight:800}
+  h2{font-size:20px;line-height:1.35;margin:0 0 6px;font-weight:700}
+  .help{color:var(--muted);font-size:14px;margin:0 0 16px}
+  p.lead{color:var(--muted);font-size:16px;line-height:1.6;margin:0 0 22px}
+
+  /* ---------- tiles ---------- */
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .tile,.chip{
+    font:inherit;color:var(--text);background:#0a1d15;border:1.5px solid var(--line);
+    border-radius:14px;cursor:pointer;position:relative;transition:border-color .2s, box-shadow .2s, transform .1s;
+  }
+  .tile{padding:16px 8px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:15px;font-weight:500}
+  .tile svg{width:46px;height:46px;stroke:var(--muted);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;transition:stroke .25s}
+  .tile .led{position:absolute;top:9px;left:9px;width:9px;height:9px;border-radius:50%;background:#2a3a33;transition:all .25s}
+  .tile:active,.chip:active{transform:scale(.97)}
+  .tile.sel,.chip.sel{border-color:var(--energy);box-shadow:0 0 0 1px var(--energy) inset, 0 0 18px rgba(62,230,255,.25)}
+  .tile.sel svg{stroke:var(--energy)}
+  .tile.sel .led{background:var(--led);box-shadow:0 0 10px 2px rgba(255,181,61,.8)}
+  .chips{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .chip{padding:12px 14px;text-align:right;font-size:15px}
+
+  /* ---------- gauge ---------- */
+  .gauge-box{margin:6px auto 0;max-width:320px}
+  .gauge{width:100%;display:block}
+  .needle{transition:transform .9s cubic-bezier(.3,1.7,.5,1);transform-origin:120px 122px;transform-box:view-box}
+  .needle.wobble{animation:wobble 1.4s ease-in-out infinite}
+  @keyframes wobble{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
+  .readout{
+    font-family:'JetBrains Mono',monospace;text-align:center;font-size:22px;font-weight:700;color:var(--energy);
+    background:#04100b;border:1px solid var(--line);border-radius:8px;width:120px;margin:-6px auto 14px;padding:4px 0;
+    text-shadow:0 0 8px rgba(62,230,255,.6);direction:ltr
+  }
+  .scale-btns{display:flex;gap:8px;direction:ltr}
+  .scale-btns button{
+    flex:1;font:inherit;color:var(--text);background:#0a1d15;border:1.5px solid var(--line);border-radius:12px;
+    padding:10px 2px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:62px;transition:all .2s
+  }
+  .scale-btns .n{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700}
+  .scale-btns .l{font-size:11.5px;color:var(--muted);line-height:1.2;direction:rtl}
+  .scale-btns button.sel{border-color:var(--energy);box-shadow:0 0 16px rgba(62,230,255,.3);background:#0c2a27}
+  .scale-btns button.sel .n{color:var(--energy)}
+  .unsure{margin-top:10px;width:100%}
+
+  /* ---------- LED bars ---------- */
+  .bars{display:flex;gap:12px;align-items:flex-end;justify-content:center;height:180px;margin:22px 0 4px;direction:ltr}
+  .bar{
+    width:76px;border:none;padding:0;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end;font:inherit;color:var(--text)
+  }
+  .bar .col{width:100%;border-radius:10px;background:#0a1d15;border:1.5px solid var(--line);display:flex;flex-direction:column-reverse;gap:4px;padding:5px;transition:all .25s}
+  .bar .seg{height:12px;border-radius:3px;background:#1a2b24;transition:all .3s}
+  .bar.lit .seg{background:var(--led);box-shadow:0 0 8px rgba(255,181,61,.7)}
+  .bar.lit .col{border-color:var(--led)}
+  .bar .l{font-size:13px;color:var(--muted);text-align:center;line-height:1.2;min-height:32px;direction:rtl}
+  .bar.chosen .l{color:var(--text);font-weight:700}
+
+  /* ---------- terminal ---------- */
+  .term{background:#020a06;border:1px solid #1f5a3a;border-radius:12px;overflow:hidden;margin-top:12px;box-shadow:0 0 24px rgba(80,255,150,.06) inset}
+  .term-head{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#06170e;border-bottom:1px solid #1f5a3a;direction:ltr}
+  .term-head i{width:9px;height:9px;border-radius:50%;background:#2d4a3b}
+  .term-head i:first-child{background:var(--led)}
+  .term-head span{font-family:'JetBrains Mono',monospace;font-size:11px;color:#5fd08f;margin-left:6px}
+  .term textarea{
+    width:100%;min-height:150px;resize:vertical;border:0;outline:0;background:transparent;color:#7dffb0;
+    font-family:'Heebo',sans-serif;font-size:16px;line-height:1.55;padding:12px;caret-color:#7dffb0;
+    text-shadow:0 0 6px rgba(125,255,176,.35)
+  }
+  .term textarea::placeholder{color:#2f7a52}
+  .count{font-family:'JetBrains Mono',monospace;font-size:11px;color:#2f7a52;text-align:left;padding:0 10px 8px;direction:ltr}
+  .optional{display:inline-block;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:20px;padding:1px 8px;margin-right:6px;vertical-align:middle}
+
+  /* ---------- nav ---------- */
+  .nav{display:flex;gap:10px;margin-top:18px}
+  .btn{
+    font:inherit;font-size:17px;font-weight:700;border-radius:14px;padding:14px 16px;cursor:pointer;border:1.5px solid var(--line);
+    background:#0a1d15;color:var(--text);transition:all .2s
+  }
+  .btn.primary{flex:1;background:linear-gradient(180deg,#5beeff,#18b9d6);color:#02161b;border-color:transparent;box-shadow:0 6px 22px rgba(62,230,255,.3)}
+  .btn.primary:disabled{background:#12302a;color:#4d7168;box-shadow:none;cursor:not-allowed}
+  .btn.ghost{min-width:92px}
+
+  /* ---------- power switch (intro) ---------- */
+  .power{display:flex;flex-direction:column;align-items:center;gap:12px;margin:10px 0 4px}
+  .switch{
+    width:120px;height:58px;border-radius:30px;background:#0a1d15;border:2px solid var(--line);position:relative;cursor:pointer;padding:0;transition:all .3s;direction:ltr
+  }
+  .switch .knob{position:absolute;top:5px;left:6px;width:44px;height:44px;border-radius:50%;background:linear-gradient(180deg,#d9e6e0,#8ea69b);box-shadow:0 3px 8px rgba(0,0,0,.5);transition:left .35s cubic-bezier(.4,1.6,.6,1)}
+  .switch.on{background:#0c3a3f;border-color:var(--energy);box-shadow:0 0 22px rgba(62,230,255,.45)}
+  .switch.on .knob{left:66px;background:linear-gradient(180deg,#bff8ff,var(--energy))}
+  .power small{color:var(--muted);font-size:14px}
+  .power small b{color:var(--energy)}
+
+  /* ---------- done ---------- */
+  .circuit{width:100%;max-width:320px;display:block;margin:4px auto 10px}
+  .wire{fill:none;stroke:var(--energy);stroke-width:4;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 1.6s ease-in-out .5s;filter:drop-shadow(0 0 4px rgba(62,230,255,.8))}
+  .closed .wire{stroke-dashoffset:0}
+  .wire-base{fill:none;stroke:var(--trace-dim);stroke-width:4;stroke-linecap:round}
+  .lever{transition:transform .5s cubic-bezier(.4,1.6,.6,1);transform-origin:150px 170px;transform-box:view-box;transform:rotate(-28deg)}
+  .closed .lever{transform:rotate(0)}
+  .ledglow{opacity:0;transition:opacity .6s ease 2.1s}
+  .closed .ledglow{opacity:1}
+  .ledbody{fill:#3a2d15;transition:fill .4s ease 2.1s}
+  .closed .ledbody{fill:var(--led)}
+  .done-text{text-align:center}
+  .status{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);text-align:center;margin-top:12px;direction:rtl}
+  .status.err{color:#ff8a7a}
+  .center{text-align:center}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="battery-row" id="batteryRow" hidden>
+    <svg class="bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+    <div class="battery" id="battery"></div>
+    <div class="pct" id="pct">0%</div>
+  </div>
+  <main id="app"></main>
+</div>
+
+<script>
+(function(){
+  // כתובת ה-Web App (מסתיימת ב-/exec) — משמשת כשהעמוד מתארח מחוץ ל-Google
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbwi3UxWthBgw__E8liAncZS34xAMQE5iGFnPYHtUAF_DZ5PxfvtINLeZh71bCcq1OO9/exec';
+
+  const ACTIVITIES = [
+    {value:'הלחמה', label:'הלחמה', icon:'solder'},
+    {value:'הדפסת תלת-ממד (3D)', label:'הדפסת תלת-ממד', icon:'printer'},
+    {value:'מסך חכם', label:'מסך חכם', icon:'screen'},
+    {value:'רובוט', label:'רובוט', icon:'robot'}
+  ];
+
+  const QUESTIONS = [
+    {key:'q1', type:'tiles', multi:true, optional:true, title:'אילו פעילויות אהבתם היום?', help:'אפשר לבחור כמה פעילויות, או לא לבחור אף אחת.',
+     extra:[]},
+    {key:'q2', type:'tiles', multi:true, optional:true, title:'באילו פעילויות הרגשתם שהצלחתם?', help:'למשל: להבין משהו חדש, לפתור אתגר או לגרום למשהו לעבוד. אפשר לבחור כמה פעילויות, או לא לבחור אף אחת.',
+     extra:[]},
+    {key:'q3', type:'gauge', title:'אחרי היום הזה, עד כמה מסקרן אתכם ללמוד עוד על אלקטרוניקה וחשמל?', n:3,
+     labels:['בכלל לא','במידה בינונית','במידה רבה']},
+    {key:'q4', type:'gauge', title:'עד כמה הייתם רוצים ללמוד במגמת ספארק בכיתה י׳?', n:5,
+     labels:['בכלל לא','','במידה בינונית','','במידה רבה מאוד'], unsure:'עדיין אין לי מספיק מידע כדי להחליט'},
+    {key:'q5', type:'bars', title:'עד כמה אתם מרגישים שתצליחו ללמוד אלקטרוניקה אם תבחרו במגמה?',
+     labels:['בכלל לא','במידה מסוימת','במידה רבה']},
+    {key:'q6', type:'terminal', optional:true,
+     title:'מה בדיוק גרם לכם לרצות ללמוד את התחום, או לחלופין להרגיש שהוא פחות מתאים לכם?'}
+  ];
+  const TOTAL = QUESTIONS.length;
+
+  const ICONS = {
+    solder:'<path d="M6 42 24 24"/><path d="M24 24l6-6 6 6-6 6z"/><path d="M33 15l7-7"/><path d="M10 40c-2 2-3 4-2 5s3 0 5-2"/><path d="M14 30c3 0 4-3 4-3"/>',
+    printer:'<rect x="6" y="6" width="36" height="36" rx="3"/><path d="M6 14h36"/><path d="M20 14v8l4 4 4-4v-8"/><path d="M14 36h20"/><path d="M17 36v-5h14v5"/>',
+    screen:'<rect x="5" y="8" width="38" height="26" rx="3"/><path d="M18 42h12M24 34v8"/><circle cx="28" cy="21" r="3"/><path d="M28 21l-6 6"/><path d="M33 15a8 8 0 0 0-10 0"/>',
+    robot:'<rect x="11" y="16" width="26" height="22" rx="5"/><circle cx="19" cy="26" r="3"/><circle cx="29" cy="26" r="3"/><path d="M19 33h10"/><path d="M24 16V9"/><circle cx="24" cy="7" r="2.5"/><path d="M11 26H6M37 26h5"/>'
+  };
+
+  const state = { step:0, answers:{}, sending:false, sent:false };
+  const app = document.getElementById('app');
+  const batteryRow = document.getElementById('batteryRow');
+  const battery = document.getElementById('battery');
+  const pct = document.getElementById('pct');
+
+  for(let i=0;i<TOTAL;i++){ const c=document.createElement('div'); c.className='cell'; battery.appendChild(c); }
+
+  function charge(){
+    let n = 0;
+    QUESTIONS.forEach((q,idx)=>{
+      const a = state.answers[q.key];
+      if(q.optional){ if(state.step > idx+1 || (a && a.length && String(a).trim())) n++; }
+      else if(a !== undefined) n++;
+    });
+    if(state.step > TOTAL) n = TOTAL;
+    const cells = battery.children;
+    for(let i=0;i<cells.length;i++){
+      const was = cells[i].classList.contains('on');
+      const on = i < n;
+      cells[i].classList.toggle('on', on);
+      if(on && !was){ cells[i].classList.remove('pulse'); void cells[i].offsetWidth; cells[i].classList.add('pulse'); }
+    }
+    pct.textContent = Math.round(n/TOTAL*100) + '%';
+  }
+
+  function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  function render(){
+    batteryRow.hidden = state.step === 0;
+    if(state.step === 0) return renderIntro();
+    if(state.step > TOTAL) return renderDone();
+    const q = QUESTIONS[state.step-1];
+    const head = `<div class="qnum">שאלה ${state.step} / ${TOTAL}</div>
+      <h2>${esc(q.title)}${q.optional&&!q.multi?'<span class="optional">רשות</span>':''}</h2>
+      ${q.help?`<p class="help">${esc(q.help)}</p>`:''}`;
+    let body = '';
+    if(q.type==='tiles') body = tilesHTML(q);
+    if(q.type==='gauge') body = gaugeHTML(q);
+    if(q.type==='bars') body = barsHTML(q);
+    if(q.type==='terminal') body = termHTML(q);
+    const last = state.step === TOTAL;
+    app.innerHTML = `<section class="card">${head}${body}</section>
+      <div class="nav">
+        <button class="btn ghost" id="back">הקודם</button>
+        <button class="btn primary" id="next">${last?'שליחה ⚡':'הבא ⚡'}</button>
+      </div>`;
+    document.getElementById('back').onclick = ()=>{ state.step--; render(); };
+    document.getElementById('next').onclick = ()=>{ state.step++; render(); if(state.step>TOTAL) submit(); };
+    bind(q);
+    updateNext(q);
+    charge();
+  }
+
+  function updateNext(q){
+    const btn = document.getElementById('next');
+    if(btn) btn.disabled = !q.optional && state.answers[q.key] === undefined;
+  }
+
+  /* ---------- intro ---------- */
+  function renderIntro(){
+    app.innerHTML = `<section class="card">
+      <div class="qnum">SPARK · משוב</div>
+      <h1>איך היה לכם ביום החשיפה לספארק?</h1>
+      <p class="lead">נשמח לדעת מה עניין אתכם ומה פחות, כדי לשפר את ימי החשיפה הבאים. השאלון אנונימי, אין תשובות נכונות או לא נכונות — חשוב לנו לשמוע מה אתם באמת חושבים.</p>
+      <div class="power">
+        <button class="switch" id="sw" aria-label="התחלה"><span class="knob"></span></button>
+        <small>הזיזו את המתג כדי <b>להדליק</b> את השאלון</small>
+      </div>
+    </section>`;
+    const sw = document.getElementById('sw');
+    sw.onclick = ()=>{
+      if(sw.classList.contains('on')) return;
+      sw.classList.add('on');
+      state.startedAt = Date.now();
+      setTimeout(()=>{ state.step = 1; render(); }, 550);
+    };
+  }
+
+  /* ---------- tiles ---------- */
+  function tilesHTML(q){
+    const a = state.answers[q.key];
+    const isSel = v => q.multi ? (a||[]).includes(v) : a===v;
+    const tiles = ACTIVITIES.map(x=>`<button class="tile${isSel(x.value)?' sel':''}" data-v="${esc(x.value)}" aria-pressed="${isSel(x.value)}">
+        <span class="led"></span><svg viewBox="0 0 48 48">${ICONS[x.icon]}</svg>${esc(x.label)}</button>`).join('');
+    const chips = q.extra.map(t=>`<button class="chip${a===t?' sel':''}" data-v="${esc(t)}">${esc(t)}</button>`).join('');
+    return `<div class="tiles">${tiles}</div><div class="chips">${chips}</div>`;
+  }
+
+  /* ---------- gauge ---------- */
+  const CX=120, CY=122, R=96;
+  function polar(r, deg){ const a = deg*Math.PI/180; return [CX + r*Math.cos(a), CY - r*Math.sin(a)]; }
+  function needleDeg(i, n){ return -90 + 180*(i-1)/(n-1); }
+
+  function gaugeHTML(q){
+    let ticks = '';
+    for(let k=0;k<=20;k++){
+      const d = 180 - 9*k; const [x1,y1]=polar(R-6,d), [x2,y2]=polar(R,d);
+      ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#2c5a46" stroke-width="1.5"/>`;
+    }
+    for(let i=1;i<=q.n;i++){
+      const d = 180 - 180*(i-1)/(q.n-1);
+      const [x1,y1]=polar(R-16,d), [x2,y2]=polar(R+2,d), [tx,ty]=polar(R-30,d);
+      ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#c98a45" stroke-width="3" stroke-linecap="round"/>
+        <text x="${tx.toFixed(1)}" y="${(ty+5).toFixed(1)}" text-anchor="middle" font-family="JetBrains Mono" font-size="14" fill="#8fb1a3">${i}</text>`;
+    }
+    const [ax,ay]=polar(R,180), [bx,by]=polar(R,0);
+    const svg = `<svg class="gauge" viewBox="0 0 240 140" aria-hidden="true">
+      <defs><linearGradient id="arcg" x1="0" x2="1"><stop offset="0" stop-color="#1b5c69"/><stop offset="1" stop-color="#3ee6ff"/></linearGradient></defs>
+      <path d="M${ax} ${ay} A${R} ${R} 0 0 1 ${bx} ${by}" fill="none" stroke="#10301f" stroke-width="14"/>
+      <path d="M${ax} ${ay} A${R} ${R} 0 0 1 ${bx} ${by}" fill="none" stroke="url(#arcg)" stroke-width="3" opacity=".7"/>
+      ${ticks}
+      <text x="120" y="96" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#4d7a66" letter-spacing="2">SPARK-METER</text>
+      <g class="needle" id="needle" style="transform:rotate(-90deg)">
+        <line x1="120" y1="122" x2="120" y2="38" stroke="#3ee6ff" stroke-width="3" stroke-linecap="round" style="filter:drop-shadow(0 0 4px rgba(62,230,255,.9))"/>
+      </g>
+      <circle cx="120" cy="122" r="9" fill="#c98a45"/><circle cx="120" cy="122" r="4" fill="#07130f"/>
+    </svg>`;
+    const a = state.answers[q.key];
+    const btns = q.labels.map((l,idx)=>`<button data-v="${idx+1}" class="${a===idx+1?'sel':''}"><span class="n">${idx+1}</span><span class="l">${esc(l)}</span></button>`).join('');
+    const unsure = q.unsure ? `<button class="chip unsure${a===q.unsure?' sel':''}" data-unsure="1">${esc(q.unsure)}</button>` : '';
+    return `<div class="gauge-box">${svg}<div class="readout" id="readout">-- / ${q.n}</div></div>
+      <div class="scale-btns">${btns}</div>${unsure}`;
+  }
+
+  function setNeedle(q, animate){
+    const nd = document.getElementById('needle'), ro = document.getElementById('readout');
+    if(!nd) return;
+    const a = state.answers[q.key];
+    nd.classList.remove('wobble');
+    if(!animate){ nd.style.transition='none'; }
+    if(typeof a === 'number'){
+      nd.style.transform = `rotate(${needleDeg(a,q.n)}deg)`;
+      ro.textContent = `${a} / ${q.n}`;
+    } else if(a === q.unsure && a){
+      nd.style.transform = 'rotate(0deg)';
+      requestAnimationFrame(()=>nd.classList.add('wobble'));
+      ro.textContent = '? / ' + q.n;
+    } else {
+      nd.style.transform = 'rotate(-90deg)';
+    }
+    if(!animate){ void nd.offsetWidth; nd.style.transition=''; }
+  }
+
+  /* ---------- bars ---------- */
+  function barsHTML(q){
+    const a = state.answers[q.key];
+    const idx = a ? q.labels.indexOf(a)+1 : 0;
+    const segs = [2,4,6];
+    return `<div class="bars">${q.labels.map((l,i)=>`
+      <button class="bar${i<idx?' lit':''}${i===idx-1?' chosen':''}" data-i="${i+1}">
+        <span class="col">${'<span class="seg"></span>'.repeat(segs[i])}</span>
+        <span class="l">${esc(l)}</span>
+      </button>`).join('')}</div>`;
+  }
+
+  /* ---------- terminal ---------- */
+  function termHTML(q){
+    const a = state.answers[q.key] || '';
+    return `<div class="term">
+      <div class="term-head"><i></i><i></i><i></i><span>spark@feedback:~$</span></div>
+      <textarea id="ta" maxlength="1500" placeholder="> כתבו כאן במילים שלכם...">${esc(a)}</textarea>
+      <div class="count" id="cnt">${a.length}/1500</div>
+    </div>`;
+  }
+
+  /* ---------- events ---------- */
+  function bind(q){
+    if(q.type==='tiles' && q.multi){
+      app.querySelectorAll('.tile').forEach(b=>b.onclick=()=>{
+        const set = new Set(state.answers[q.key]||[]);
+        set.has(b.dataset.v) ? set.delete(b.dataset.v) : set.add(b.dataset.v);
+        state.answers[q.key] = ACTIVITIES.map(x=>x.value).filter(v=>set.has(v));
+        b.classList.toggle('sel', set.has(b.dataset.v));
+        b.setAttribute('aria-pressed', set.has(b.dataset.v));
+        charge();
+      });
+    } else if(q.type==='tiles'){
+      app.querySelectorAll('.tile,.chip').forEach(b=>b.onclick=()=>{
+        state.answers[q.key] = b.dataset.v;
+        app.querySelectorAll('.tile,.chip').forEach(x=>x.classList.toggle('sel', x===b));
+        updateNext(q); charge();
+      });
+    }
+    if(q.type==='gauge'){
+      setNeedle(q,false);
+      app.querySelectorAll('.scale-btns button').forEach(b=>b.onclick=()=>{
+        state.answers[q.key] = Number(b.dataset.v);
+        app.querySelectorAll('.scale-btns button,.unsure').forEach(x=>x.classList.toggle('sel', x===b));
+        setNeedle(q,true); updateNext(q); charge();
+      });
+      const u = app.querySelector('.unsure');
+      if(u) u.onclick=()=>{
+        state.answers[q.key] = q.unsure;
+        app.querySelectorAll('.scale-btns button').forEach(x=>x.classList.remove('sel'));
+        u.classList.add('sel');
+        setNeedle(q,true); updateNext(q); charge();
+      };
+    }
+    if(q.type==='bars'){
+      app.querySelectorAll('.bar').forEach(b=>b.onclick=()=>{
+        const i = Number(b.dataset.i);
+        state.answers[q.key] = q.labels[i-1];
+        app.querySelectorAll('.bar').forEach((x,j)=>{ x.classList.toggle('lit', j<i); x.classList.toggle('chosen', j===i-1); });
+        updateNext(q); charge();
+      });
+    }
+    if(q.type==='terminal'){
+      const ta = document.getElementById('ta'), cnt = document.getElementById('cnt');
+      ta.oninput = ()=>{ state.answers[q.key] = ta.value; cnt.textContent = ta.value.length + '/1500'; charge(); };
+    }
+  }
+
+  /* ---------- done ---------- */
+  function renderDone(){
+    charge();
+    app.innerHTML = `<section class="card done-text" id="doneCard">
+      <svg class="circuit" viewBox="0 0 300 200" aria-hidden="true">
+        <path class="wire-base" d="M40 30 H260 V170 H40 Z"/>
+        <path class="wire" pathLength="1" d="M150 170 H40 V30 H260 V170 H150"/>
+        <!-- battery (left) -->
+        <rect x="28" y="84" width="24" height="32" fill="#0d241b"/>
+        <line x1="22" y1="92" x2="58" y2="92" stroke="#e8f3ee" stroke-width="4"/>
+        <line x1="30" y1="106" x2="50" y2="106" stroke="#e8f3ee" stroke-width="4"/>
+        <text x="66" y="97" font-family="JetBrains Mono" font-size="12" fill="#8fb1a3">+</text>
+        <!-- resistor (top) -->
+        <rect x="118" y="20" width="64" height="20" fill="#0d241b"/>
+        <polyline points="118,30 124,20 134,40 144,20 154,40 164,20 174,40 182,30" fill="none" stroke="#c98a45" stroke-width="3" stroke-linejoin="round"/>
+        <!-- LED (right) -->
+        <circle class="ledglow" cx="260" cy="100" r="34" fill="rgba(255,181,61,.25)" style="filter:blur(6px)"/>
+        <rect x="246" y="80" width="28" height="40" fill="#0d241b"/>
+        <polygon class="ledbody" points="246,84 274,84 260,108" stroke="#ffb53d" stroke-width="2"/>
+        <line x1="246" y1="112" x2="274" y2="112" stroke="#ffb53d" stroke-width="3"/>
+        <g class="ledglow" stroke="#ffb53d" stroke-width="2.5" stroke-linecap="round">
+          <line x1="282" y1="82" x2="292" y2="74"/><line x1="284" y1="96" x2="296" y2="94"/>
+        </g>
+        <!-- switch (bottom) -->
+        <rect x="118" y="160" width="64" height="20" fill="#0d241b"/>
+        <circle cx="122" cy="170" r="4" fill="#e8f3ee"/><circle cx="178" cy="170" r="4" fill="#e8f3ee"/>
+        <g class="lever"><line x1="122" y1="170" x2="178" y2="170" stroke="#e8f3ee" stroke-width="4" stroke-linecap="round" style="transform-origin:122px 170px;transform-box:view-box"/></g>
+      </svg>
+      <h1>המעגל נסגר! ⚡</h1>
+      <p class="lead" style="margin-bottom:6px">תודה רבה! המשוב שלכם עוזר לנו לשפר את ימי החשיפה הבאים.</p>
+      <div class="status" id="status">שולח את התשובות...</div>
+    </section>`;
+    // lever rotates around its left contact
+    const lever = app.querySelector('.lever'); lever.style.transformOrigin = '122px 170px';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>document.getElementById('doneCard').classList.add('closed')));
+  }
+
+  function setStatus(msg, err, retry){
+    const s = document.getElementById('status'); if(!s) return;
+    s.className = 'status' + (err?' err':'');
+    s.innerHTML = esc(msg) + (retry?' <button class="btn ghost" id="retry" style="margin-top:10px;display:block;margin-inline:auto">לנסות שוב</button>':'');
+    if(retry) document.getElementById('retry').onclick = ()=>{ setStatus('שולח את התשובות...'); submit(); };
+  }
+
+  function submit(){
+    if(state.sending || state.sent) return;
+    state.sending = true;
+    const a = state.answers;
+    const payload = { q1:(a.q1||[]), q2:(a.q2||[]), q3:a.q3, q4:a.q4, q5:a.q5, q6:(a.q6||'').trim(),
+      durationSec: state.startedAt ? Math.round((Date.now()-state.startedAt)/1000) : null };
+    const ok = ()=>{ state.sending=false; state.sent=true; setStatus('✓ התשובות נשמרו'); };
+    const fail = ()=>{ state.sending=false; setStatus('לא הצלחנו לשמור את התשובות.', true, true); };
+    if(window.google && google.script && google.script.run){
+      google.script.run.withSuccessHandler(ok).withFailureHandler(fail).submitResponse(payload);
+    } else if(ENDPOINT && location.protocol.startsWith('http') && !/claude\.ai|claudeusercontent/.test(location.host)){
+      // עמוד חיצוני: שליחה ל-Apps Script בלי עוגיות Google, כך שאין בעיית ריבוי חשבונות
+      fetch(ENDPOINT, {method:'POST', mode:'no-cors', credentials:'omit', redirect:'follow',
+        headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload)})
+        .then(ok, fail);
+    } else {
+      setTimeout(()=>{ state.sending=false; state.sent=true; setStatus('מצב תצוגה מקדימה — התשובות לא נשמרו'); }, 900);
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
